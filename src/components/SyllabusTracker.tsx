@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Subject, SyllabusTopic } from '../db';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,10 +16,42 @@ import {
   Target
 } from 'lucide-react';
 
+import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs } from 'firebase/firestore';
+import { db as fdb } from '../firebase';
+import { useAuth } from '../AuthContext';
+
 export default function SyllabusTracker() {
-  const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
-  const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const { user, login } = useAuth();
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Synchronize Syllabus from Firestore
+  useEffect(() => {
+    if (!user) return;
+    
+    const q = query(collection(fdb, 'userSubjects'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, async (snap) => {
+      if (snap.empty) {
+        // First time initialization: Clone from local DB to default cloud state
+        const localSubs = await db.subjects.toArray();
+        for (const s of localSubs) {
+          await setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
+            ...s,
+            id: undefined, // Let Firestore use its own structure
+            userId: user.uid,
+            originalId: s.id
+          });
+        }
+      } else {
+        const cloudSubs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        setSubjects(cloudSubs);
+      }
+      setLoading(false);
+    });
+
+    return unsub;
+  }, [user]);
 
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId);
 
@@ -28,16 +60,29 @@ export default function SyllabusTracker() {
   const completedTopics = subjects.reduce((acc, s) => acc + (s.syllabus?.filter(t => t.isCompleted).length || 0), 0);
   const overallPercentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
 
-  const toggleTopic = async (subjectId: number, topicName: string) => {
-    const subject = await db.subjects.get(subjectId);
+  const toggleTopic = async (subjectId: string, topicName: string) => {
+    const subject = subjects.find(s => s.id === subjectId);
     if (!subject) return;
     
     const newSyllabus = subject.syllabus.map(t => 
       t.name === topicName ? { ...t, isCompleted: !t.isCompleted } : t
     );
     
-    await db.subjects.update(subjectId, { syllabus: newSyllabus });
+    await updateDoc(doc(fdb, 'userSubjects', subjectId), { syllabus: newSyllabus });
   };
+
+  if (!user) return (
+    <div className="flex flex-col items-center justify-center h-96 space-y-6 text-center">
+       <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-3xl text-zinc-500">
+         <Trophy size={48} />
+       </div>
+       <div className="space-y-2">
+         <h3 className="text-xl font-bold italic tracking-tight">Sync <span className="font-light not-italic">Required</span></h3>
+         <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold max-w-xs">Connecting identity is required to track and synchronize syllabus coverage across nodes.</p>
+       </div>
+       <button onClick={() => login()} className="px-8 py-3 bg-white text-black text-[10px] font-bold uppercase tracking-widest rounded-full hover:scale-105 transition-transform">Authorize Node</button>
+    </div>
+  );
 
   return (
     <div className="space-y-12">

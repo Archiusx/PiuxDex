@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { db, Subject } from '../db';
 import { ArrowRight, Calendar, CheckCircle, GraduationCap } from 'lucide-react';
 
 import { collection, query, where, onSnapshot, limit, orderBy } from 'firebase/firestore';
@@ -8,23 +8,35 @@ import { db as fdb } from '../firebase';
 import { useAuth } from '../AuthContext';
 
 export default function HomeView({ setActiveView }: { setActiveView: (v: any) => void }) {
-  const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
+  const [subjects, setSubjects] = React.useState<Subject[]>([]);
   const [firestoreTasks, setFirestoreTasks] = React.useState<any[]>([]);
   const { user } = useAuth();
   
   React.useEffect(() => {
     if (!user) return;
-    const q = query(
+
+    // Sync Subjects/Syllabus
+    const qSub = query(collection(fdb, 'userSubjects'), where('userId', '==', user.uid));
+    const unsubSub = onSnapshot(qSub, (snap) => {
+      setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+    });
+
+    // Sync Tasks
+    const qTask = query(
       collection(fdb, 'tasks'), 
       where('ownerId', '==', user.uid),
       where('completed', '==', false),
       orderBy('date', 'asc'),
       limit(3)
     );
-    const unsub = onSnapshot(q, (snap) => {
+    const unsubTask = onSnapshot(qTask, (snap) => {
       setFirestoreTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    return unsub;
+
+    return () => {
+      unsubSub();
+      unsubTask();
+    };
   }, [user]);
 
   const totalTopics = subjects.reduce((acc, s) => acc + (s.syllabus?.length || 0), 0);

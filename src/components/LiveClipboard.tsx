@@ -42,6 +42,15 @@ export default function LiveClipboard() {
     return unsub;
   }, [isFocused, isDirty, lastUpdated]);
 
+  useEffect(() => {
+    if (isDirty && !syncing) {
+      const timeout = setTimeout(() => {
+        handleUpdate();
+      }, 1000); // Debounce sync for 1 second of inactivity
+      return () => clearTimeout(timeout);
+    }
+  }, [content]);
+
   const handleUpdate = async (newVal?: string) => {
     if (!user) return;
     setSyncing(true);
@@ -76,8 +85,8 @@ export default function LiveClipboard() {
       const text = await navigator.clipboard.readText();
       setContent(text);
       setIsDirty(true);
-      // Auto-upload on paste
-      await handleUpdate(text);
+      // Immediate push for manual actions
+      handleUpdate(text);
     } catch (err) {
       console.error("Paste failed", err);
       setPastingError(true);
@@ -122,8 +131,8 @@ export default function LiveClipboard() {
              </motion.div>
            )}
            <div className="text-[10px] uppercase font-bold tracking-widest text-zinc-600 bg-zinc-950 border border-zinc-900 px-4 py-2 rounded flex items-center">
-              <span className={`status-dot ${syncing ? 'animate-pulse' : ''}`}></span>
-              {syncing ? 'Syncing...' : 'Encrypted & Shared'}
+              <span className={`status-dot ${syncing ? 'animate-pulse' : 'bg-blue-500 shadow-blue-500'}`}></span>
+              {syncing ? 'Broadcasting...' : 'Zero Latency Active'}
            </div>
         </div>
       </header>
@@ -135,17 +144,11 @@ export default function LiveClipboard() {
             <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Global Space</span>
           </div>
           <div className="flex items-center space-x-2">
-            <button 
-              onClick={handleUpdate}
-              disabled={!isDirty}
-              className={`px-3 py-1 text-[9px] font-bold uppercase rounded flex items-center transition-all ${
-                isDirty 
-                  ? 'bg-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' 
-                  : 'bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed'
-              }`}
-            >
-              Push to Live
-            </button>
+            <div className={`px-3 py-1 text-[8px] font-bold uppercase rounded flex items-center transition-all ${
+                isDirty ? 'text-zinc-400' : 'text-green-500'
+              }`}>
+              {isDirty ? 'MODIFIED locally' : 'SYNCHRONIZED'}
+            </div>
             <button 
               onClick={handleCopy}
               className="px-3 py-1 bg-zinc-900 border border-zinc-800 text-zinc-400 text-[9px] font-bold uppercase rounded flex items-center hover:bg-white hover:text-black transition-all"
@@ -157,7 +160,7 @@ export default function LiveClipboard() {
               onClick={handlePaste}
               className="px-3 py-1 bg-white text-black text-[9px] font-bold uppercase rounded hover:bg-zinc-200 transition-all"
             >
-              Paste & Sync
+              Paste & Broadcast
             </button>
           </div>
         </div>
