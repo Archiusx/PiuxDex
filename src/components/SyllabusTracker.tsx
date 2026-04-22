@@ -71,6 +71,21 @@ export default function SyllabusTracker() {
     await updateDoc(doc(fdb, 'userSubjects', subjectId), { syllabus: newSyllabus });
   };
 
+  const syncCurriculum = async () => {
+    if (!user) return;
+    setLoading(true);
+    const localSubs = await db.subjects.toArray();
+    for (const s of localSubs) {
+      await setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
+        ...s,
+        id: undefined, 
+        userId: user.uid,
+        originalId: s.id
+      });
+    }
+    setLoading(false);
+  };
+
   if (!user) return (
     <div className="flex flex-col items-center justify-center h-96 space-y-6 text-center">
        <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-3xl text-zinc-500">
@@ -89,7 +104,16 @@ export default function SyllabusTracker() {
       <header className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-light italic tracking-tight italic">Syllabus <span className="font-bold not-italic font-bold">Tracker</span></h2>
-          <p className="text-zinc-500 mt-2 text-sm uppercase tracking-widest font-medium">B.Tech Sem 4 • Coverage Analysis</p>
+          <div className="flex items-center space-x-4 mt-2">
+            <p className="text-zinc-500 text-sm uppercase tracking-widest font-medium">B.Tech Sem 4 • Coverage Analysis</p>
+            <button 
+              onClick={syncCurriculum}
+              className="flex items-center space-x-2 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-[8px] font-bold uppercase tracking-widest text-zinc-500 hover:bg-white hover:text-black transition-all"
+            >
+              <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
+              <span>Update Content</span>
+            </button>
+          </div>
         </div>
         <div className="flex items-center space-x-6">
            <div className="text-right">
