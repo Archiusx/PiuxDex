@@ -68,6 +68,18 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["content", "lastUpdated"]
+    },
+    "ClipboardMessage": {
+      "title": "Clipboard Log",
+      "description": "Historical message in the global stream",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string" },
+        "author": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["content", "author", "timestamp"]
     }
   },
   "firestore": {
@@ -86,6 +98,10 @@
     "clipboard/global": {
       "schema": "Clipboard",
       "description": "The real-time shared text bridge"
+    },
+    "clipboard_stream/{msgId}": {
+      "schema": "ClipboardMessage",
+      "description": "Chronological global node message log"
     }
   }
 }

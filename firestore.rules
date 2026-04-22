@@ -75,9 +75,12 @@ service cloud.firestore {
 
     match /clipboard/global {
       allow read: if isSignedIn();
-      allow update: if isSignedIn() && isValidClipboard(incoming());
-      // Only allow create if it doesn't exist
-      allow create: if isSignedIn() && isValidClipboard(incoming());
+      allow update, create: if isSignedIn() && isValidClipboard(incoming());
+    }
+
+    match /clipboard_stream/{msgId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn(); // Add more validation if needed
     }
     
     // Admin list setup (Unlockable via PIN 9763)
