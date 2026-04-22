@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -- HARDENED HELPERS --
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // Auth Check for Admin (Bootstrap adityadeshakar@gmail.com)
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == 'adityadeshakar@gmail.com' || 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // -- SCHEMAS --
+    function isValidSubject(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             data.code is string && data.code.size() <= 20 &&
+             data.color is string && data.color.size() <= 10 &&
+             data.syllabus is list && data.syllabus.size() <= 20;
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() <= 200 &&
+             data.priority in ['low', 'medium', 'high'] &&
+             data.ownerId == request.auth.uid;
+    }
+
+    function isValidResource(data) {
+      return data.name is string && data.name.size() <= 200 &&
+             data.type in ['pdf', 'pptx', 'c', 'algo', 'other'] &&
+             data.url is string && data.url.size() <= 500 &&
+             data.creatorId == request.auth.uid;
+    }
+
+    function isValidClipboard(data) {
+      return data.content is string && data.content.size() <= 10000;
+    }
+
+    // -- COLLECTIONS --
+
+    match /subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidSubject(incoming()) && isValidId(subjectId);
+    }
+
+    match /tasks/{taskId} {
+      // Secure List: evaluating resource.data against auth.uid
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      
+      allow create: if isSignedIn() && isValidTask(incoming()) && isValidId(taskId);
+      allow update: if isSignedIn() && resource.data.ownerId == request.auth.uid && 
+                       isValidTask(incoming()) &&
+                       incoming().ownerId == existing().ownerId;
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /resources/{resourceId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidResource(incoming()) && isValidId(resourceId);
+      allow update: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin()) && 
+                       isValidResource(incoming()) &&
+                       incoming().creatorId == existing().creatorId;
+      allow delete: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
+    }
+
+    match /clipboard/global {
+      allow read: if isSignedIn();
+      allow update: if isSignedIn() && isValidClipboard(incoming());
+      // Only allow create if it doesn't exist
+      allow create: if isSignedIn() && isValidClipboard(incoming());
+    }
+    
+    // Admin list setup (only writable by owner email)
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if request.auth.token.email == 'adityadeshakar@gmail.com';
+    }
+  }
+}

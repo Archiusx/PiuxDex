@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "SyllabusTopic": {
+      "title": "Syllabus Topic",
+      "description": "A specific module or topic within a subject curriculum",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "isCompleted": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
+        "predictedQuestions": { "type": "array", "items": { "type": "string", "enum": ["3M", "6M"] } },
+        "timeEst": { "type": "number", "description": "Hours to complete" }
+      },
+      "required": ["name", "isCompleted", "priority", "predictedQuestions", "timeEst"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "An academic course with syllabus modules",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "color": { "type": "string" },
+        "ca": { "type": "number" },
+        "mse": { "type": "number" },
+        "ese": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "syllabus": { "type": "array", "items": { "$ref": "#/entities/SyllabusTopic" } }
+      },
+      "required": ["name", "code", "color", "syllabus"]
+    },
+    "Task": {
+      "title": "User Task",
+      "description": "Personal milestone or requirement",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["title", "date", "priority", "ownerId"]
+    },
+    "Resource": {
+      "title": "Shared Resource",
+      "description": "A link to collaborative study material",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["pdf", "pptx", "c", "algo", "other"] },
+        "url": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "topicName": { "type": "string" },
+        "addedAt": { "type": "number" },
+        "creatorId": { "type": "string" }
+      },
+      "required": ["name", "type", "url", "addedAt", "creatorId"]
+    },
+    "Clipboard": {
+      "title": "Shared Clipboard",
+      "description": "Global shared text data",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string" },
+        "lastUpdated": { "type": "number" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["content", "lastUpdated"]
+    }
+  },
+  "firestore": {
+    "subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Academic course repository"
+    },
+    "tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Personal user task management"
+    },
+    "resources/{resourceId}": {
+      "schema": "Resource",
+      "description": "Collaborative material storage"
+    },
+    "clipboard/global": {
+      "schema": "Clipboard",
+      "description": "The real-time shared text bridge"
+    }
+  }
+}

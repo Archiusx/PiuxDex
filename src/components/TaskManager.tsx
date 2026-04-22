@@ -1,41 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Task } from '../db';
 import { Plus, Trash2, CheckCircle2, Circle, Clock, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function TaskManager() {
-  const tasks = useLiveQuery(() => db.tasks.toArray()) || [];
-  // Sort in memory for simplicity or use db.tasks.orderBy('date').toArray()
-  const sortedTasks = [...tasks].sort((a, b) => a.date.localeCompare(b.date));
+import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import { db as fdb } from '../firebase';
+import { useAuth } from '../AuthContext';
 
+export default function TaskManager() {
+  const [firestoreTasks, setFirestoreTasks] = useState<any[]>([]);
+  const { user, login } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDate, setNewDate] = useState('');
   const [priority, setPriority] = useState<Task['priority']>('medium');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(fdb, 'tasks'), 
+      where('ownerId', '==', user.uid),
+      orderBy('date', 'asc')
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setFirestoreTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return unsub;
+  }, [user]);
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !newDate) return;
-    await db.tasks.add({
+    if (!newTitle || !newDate || !user) return;
+    await addDoc(collection(fdb, 'tasks'), {
       title: newTitle,
       date: newDate,
       completed: false,
       priority,
-      description: ''
+      description: '',
+      ownerId: user.uid
     });
     setNewTitle('');
     setNewDate('');
     setShowAdd(false);
   };
 
-  const toggleTask = async (id: number, current: boolean) => {
-    await db.tasks.update(id, { completed: !current });
+  const toggleTask = async (id: string, current: boolean) => {
+    await updateDoc(doc(fdb, 'tasks', id), { completed: !current });
   };
 
-  const deleteTask = async (id: number) => {
-    await db.tasks.delete(id);
+  const deleteTask = async (id: string) => {
+    await deleteDoc(doc(fdb, 'tasks', id));
   };
+
+  if (!user) return (
+    <div className="flex flex-col items-center justify-center h-96 space-y-6 text-center">
+       <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-3xl text-zinc-500">
+         <Calendar size={48} />
+       </div>
+       <div className="space-y-2">
+         <h3 className="text-xl font-bold italic tracking-tight">Milestone Sync <span className="font-light not-italic">Inactive</span></h3>
+         <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold max-w-xs">Connecting identity is required to persist and synchronize your schedule across nodes.</p>
+       </div>
+       <button onClick={() => login()} className="px-8 py-3 bg-white text-black text-[10px] font-bold uppercase tracking-widest rounded-full hover:scale-105 transition-transform">Authorize Node</button>
+    </div>
+  );
 
   return (
     <div className="space-y-10">
@@ -111,7 +142,7 @@ export default function TaskManager() {
       </AnimatePresence>
 
       <div className="space-y-3">
-        {sortedTasks.map((task) => (
+        {firestoreTasks.map((task) => (
           <motion.div 
             layout
             key={task.id} 
@@ -158,7 +189,7 @@ export default function TaskManager() {
         ))}
 
 
-        {tasks.length === 0 && !showAdd && (
+        {firestoreTasks.length === 0 && !showAdd && !loading && (
           <div className="p-20 text-center space-y-4 border-2 border-dashed border-neutral-900 rounded-3xl">
              <div className="p-4 bg-neutral-900/50 rounded-full w-fit mx-auto text-neutral-500">
                <Calendar size={32} />

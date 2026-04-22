@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Clipboard as ClipboardIcon, Copy, Check, Share2, RefreshCw } from 'lucide-react';
 
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db as fdb } from '../firebase';
+import { useAuth } from '../AuthContext';
+
 export default function LiveClipboard() {
   const [content, setContent] = useState('');
   const [lastUpdated, setLastUpdated] = useState<number>(0);
@@ -12,52 +16,48 @@ export default function LiveClipboard() {
   const [syncing, setSyncing] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const { user, login } = useAuth();
 
-  const fetchClipboard = async (silent = false) => {
-    // BLOCK overwriting if user has unsaved changes or is focused
-    if ((isFocused || isDirty) && silent) return; 
-    
-    if (!silent) setLoading(true);
-    else setSyncing(true);
-    
-    try {
-      const res = await fetch('/api/clipboard');
-      const data = await res.json();
-      
-      // Only update if something actually changed on server
-      if (data.lastUpdated > lastUpdated) {
-        setContent(data.content);
-        setLastUpdated(data.lastUpdated);
-        setUpdatedBy(data.updatedBy);
-      }
-    } catch (err) {
-      console.error("Clipboard fetch failed", err);
-    } finally {
-      setLoading(false);
-      setSyncing(false);
-    }
-  };
-
+  // Synchronize with Firestore Real-time
   useEffect(() => {
-    fetchClipboard();
-    // Poll every 5 seconds for sync to reduce race conditions
-    const interval = setInterval(() => fetchClipboard(true), 5000);
-    return () => clearInterval(interval);
-  }, [lastUpdated]); // Dependency on lastUpdated to ensure fresh checks
+    const unsub = onSnapshot(doc(fdb, 'clipboard', 'global'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        // Only update if not typing locally to avoid cursor jumps
+        if (!isFocused && !isDirty) {
+          setContent(data.content || '');
+          setLastUpdated(data.lastUpdated || 0);
+          setUpdatedBy(data.updatedBy || 'Peer');
+        } else if (data.lastUpdated > lastUpdated) {
+          // If server data is newer than what we were working on, we might want to notify
+          // For now, let's just sync when focus IS lost
+        }
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore Clipboard Error", err);
+      setLoading(false);
+    });
 
-  const handleUpdate = async () => {
+    return unsub;
+  }, [isFocused, isDirty, lastUpdated]);
+
+  const handleUpdate = async (newVal?: string) => {
+    if (!user) return;
     setSyncing(true);
+    const textToPush = newVal !== undefined ? newVal : content;
+    
     try {
-      await fetch('/api/clipboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, user: "Piux User" })
-      });
+      const pushTime = Date.now();
+      await setDoc(doc(fdb, 'clipboard', 'global'), {
+        content: textToPush,
+        lastUpdated: pushTime,
+        updatedBy: user.displayName || user.email || 'Anonymous',
+        serverTimestamp: serverTimestamp()
+      }, { merge: true });
+      
+      setLastUpdated(pushTime);
       setIsDirty(false);
-      // Immediately fetch back to sync timestamps
-      const res = await fetch('/api/clipboard');
-      const data = await res.json();
-      setLastUpdated(data.lastUpdated);
     } catch (err) {
       console.error("Update failed", err);
     } finally {
@@ -77,18 +77,26 @@ export default function LiveClipboard() {
       setContent(text);
       setIsDirty(true);
       // Auto-upload on paste
-      await fetch('/api/clipboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text, user: "Piux User" })
-      });
-      setIsDirty(false);
+      await handleUpdate(text);
     } catch (err) {
       console.error("Paste failed", err);
       setPastingError(true);
       setTimeout(() => setPastingError(false), 5000);
     }
   };
+
+  if (!user) return (
+    <div className="flex flex-col items-center justify-center h-96 space-y-6 text-center">
+       <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-3xl text-zinc-500">
+         <ClipboardIcon size={48} />
+       </div>
+       <div className="space-y-2">
+         <h3 className="text-xl font-bold italic tracking-tight">Stream Access <span className="font-light not-italic">Restricted</span></h3>
+         <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold max-w-xs">Connecting identity is required to interact with the real-time clipboard stream.</p>
+       </div>
+       <button onClick={() => login()} className="px-8 py-3 bg-white text-black text-[10px] font-bold uppercase tracking-widest rounded-full hover:scale-105 transition-transform">Authorize Node</button>
+    </div>
+  );
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">

@@ -3,10 +3,30 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { ArrowRight, Calendar, CheckCircle, GraduationCap } from 'lucide-react';
 
+import { collection, query, where, onSnapshot, limit, orderBy } from 'firebase/firestore';
+import { db as fdb } from '../firebase';
+import { useAuth } from '../AuthContext';
+
 export default function HomeView({ setActiveView }: { setActiveView: (v: any) => void }) {
   const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
-  const tasks = useLiveQuery(() => db.tasks.limit(3).toArray()) || [];
+  const [firestoreTasks, setFirestoreTasks] = React.useState<any[]>([]);
+  const { user } = useAuth();
   
+  React.useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(fdb, 'tasks'), 
+      where('ownerId', '==', user.uid),
+      where('completed', '==', false),
+      orderBy('date', 'asc'),
+      limit(3)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setFirestoreTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [user]);
+
   const totalTopics = subjects.reduce((acc, s) => acc + (s.syllabus?.length || 0), 0);
   const completedTopics = subjects.reduce((acc, s) => acc + (s.syllabus?.filter(t => t.isCompleted).length || 0), 0);
   const overallCoverage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
@@ -77,7 +97,12 @@ export default function HomeView({ setActiveView }: { setActiveView: (v: any) =>
         <section>
           <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-zinc-500 mb-6">Upcoming Milestones</h3>
           <div className="space-y-4">
-            {tasks.length > 0 ? tasks.map(task => (
+            {!user ? (
+               <div className="p-12 border border-zinc-900 bg-[#050505] rounded-xl flex flex-col items-center justify-center text-center opacity-40 grayscale">
+                 <p className="text-zinc-600 text-[10px] uppercase tracking-widest font-bold">Cloud Sync Required</p>
+                 <button onClick={() => setActiveView('tasks')} className="mt-4 text-[10px] font-bold uppercase tracking-widest text-zinc-300 hover:text-white transition-colors underline underline-offset-8">Authorize Identity</button>
+               </div>
+            ) : firestoreTasks.length > 0 ? firestoreTasks.map(task => (
               <div key={task.id} className="p-5 bg-[#111111] border border-[#222222] rounded-lg flex items-center space-x-6">
                 <div className="w-10 text-[10px] text-zinc-600 font-mono text-center leading-tight">
                    {task.date.split('-').slice(1).join('/')}

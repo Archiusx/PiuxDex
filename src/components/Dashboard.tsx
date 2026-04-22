@@ -20,9 +20,12 @@ import SyllabusTracker from './SyllabusTracker';
 
 type View = 'dashboard' | 'academic' | 'tasks' | 'resources' | 'clipboard' | 'syllabus';
 
+import { useAuth } from '../AuthContext';
+
 export default function Dashboard() {
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { user, login, logout } = useAuth();
 
   const navigation = [
     { id: 'dashboard', name: 'Overview', icon: LayoutDashboard },
@@ -87,6 +90,22 @@ export default function Dashboard() {
           </nav>
 
           <div className="pt-6 border-t border-zinc-800 mt-auto">
+            {!user ? (
+               <button 
+                 onClick={login}
+                 className="w-full py-2 bg-white text-black text-xs font-bold uppercase tracking-widest rounded mb-6 hover:bg-zinc-200 transition-colors"
+               >
+                 Connect Identity
+               </button>
+            ) : (
+              <div className="mb-6 flex items-center space-x-3 group">
+                 <img src={user.photoURL || ''} alt="PR" className="w-8 h-8 rounded border border-zinc-800" />
+                 <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-white truncate uppercase">{user.displayName}</p>
+                    <button onClick={logout} className="text-[8px] text-zinc-500 hover:text-white uppercase tracking-widest font-bold">Disconnect</button>
+                 </div>
+              </div>
+            )}
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-2">BTECH SEM 4 • DBATU</p>
             <div className="flex items-center justify-between text-[9px] text-zinc-400">
                <span>V 1.0.4-STABLE</span>

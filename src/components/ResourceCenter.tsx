@@ -26,8 +26,12 @@ const RESOURCE_TYPES = [
   { id: 'other', name: 'Other Ref', icon: FolderRoot, color: 'text-zinc-500', bg: 'bg-zinc-500/10', border: 'border-zinc-500/20' },
 ];
 
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { db as fdb } from '../firebase';
+import { useAuth } from '../AuthContext';
+
 export default function ResourceCenter() {
-  const resources = useLiveQuery(() => db.resources.orderBy('addedAt').reverse().toArray()) || [];
+  const [firestoreResources, setFirestoreResources] = useState<any[]>([]);
   const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState('');
@@ -37,72 +41,66 @@ export default function ResourceCenter() {
   const [selectedTopic, setSelectedTopic] = useState<string | undefined>(undefined);
   const [viewingResource, setViewingResource] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const { user, login } = useAuth();
 
-  // Synchronize with backend
+  // Synchronize with Firestore
   React.useEffect(() => {
-    const syncResources = async () => {
-      try {
-        const response = await fetch('/api/resources');
-        const globalResources = await response.json();
-        
-        // Find resources that are on server but not in local Dexie
-        for (const gRes of globalResources) {
-          const exists = await db.resources.where('url').equals(gRes.url).first();
-          if (!exists) {
-            await db.resources.add({
-              ...gRes,
-              id: undefined // Let Dexie assign local ID
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Sync failed", err);
-      }
-    };
-
-    syncResources();
-    const interval = setInterval(syncResources, 10000); // Poll every 10s
-    return () => clearInterval(interval);
+    const q = query(collection(fdb, 'resources'), orderBy('addedAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const res = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFirestoreResources(res);
+      setIsSyncing(false);
+    }, (err) => {
+      console.error("Firestore sync failed", err);
+    });
+    return unsubscribe;
   }, []);
 
   const addResource = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name) return;
+    if (!name || !user) return;
     
     const newRes = {
       name,
       type: type as any,
       url: url || '#',
-      subjectId: selectedSubjectId,
-      topicName: selectedTopic,
-      addedAt: Date.now()
+      subjectId: selectedSubjectId || null,
+      topicName: selectedTopic || null,
+      addedAt: Date.now(),
+      serverTimestamp: serverTimestamp(),
+      creatorId: user.uid,
+      creatorName: user.displayName
     };
 
-    // 1. Add locally
-    await db.resources.add(newRes);
-
-    // 2. Add to global vault
     try {
       setIsSyncing(true);
-      await fetch('/api/resources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newRes)
-      });
+      await addDoc(collection(fdb, 'resources'), newRes);
+      setName('');
+      setUrl('');
+      setSelectedSubjectId(undefined);
+      setSelectedTopic(undefined);
+      setShowAdd(false);
     } catch (err) {
       console.error("Global sync failed", err);
     } finally {
       setIsSyncing(false);
     }
-
-    setName('');
-    setUrl('');
-    setSelectedSubjectId(undefined);
-    setSelectedTopic(undefined);
-    setShowAdd(false);
   };
 
   const activeSubject = subjects.find(s => s.id === selectedSubjectId);
+
+  if (!user) return (
+    <div className="flex flex-col items-center justify-center h-96 space-y-6 text-center">
+       <div className="p-6 bg-zinc-900/50 border border-zinc-800 rounded-3xl text-zinc-500">
+         <FolderRoot size={48} />
+       </div>
+       <div className="space-y-2">
+         <h3 className="text-xl font-bold italic tracking-tight">Vault Access <span className="font-light not-italic">Restricted</span></h3>
+         <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold max-w-xs">Connecting identity is required to synchronize materials across the global node.</p>
+       </div>
+       <button onClick={() => login()} className="px-8 py-3 bg-white text-black text-[10px] font-bold uppercase tracking-widest rounded-full hover:scale-105 transition-transform">Authorize Node</button>
+    </div>
+  );
 
   return (
     <div className="space-y-10">
@@ -200,7 +198,7 @@ export default function ResourceCenter() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {resources.map((res) => {
+        {firestoreResources.map((res) => {
           const typeInfo = RESOURCE_TYPES.find(rt => rt.id === res.type) || RESOURCE_TYPES[4];
           const Icon = typeInfo.icon;
           
@@ -262,7 +260,7 @@ export default function ResourceCenter() {
         })}
 
 
-        {resources.length === 0 && (
+        {firestoreResources.length === 0 && (
           <div className="col-span-full py-20 theme-card flex flex-col items-center justify-center border-dashed text-center opacity-30">
              <Library size={40} className="mb-4 text-zinc-700" />
              <p className="text-[10px] uppercase tracking-widest font-bold">Vault Locked • Inject Materials to Initiate</p>
