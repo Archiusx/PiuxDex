@@ -7,9 +7,11 @@ export default function HomeView({ setActiveView }: { setActiveView: (v: any) =>
   const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
   const tasks = useLiveQuery(() => db.tasks.limit(3).toArray()) || [];
   
-  const totalESEProgress = subjects.length > 0 
-    ? Math.round(subjects.reduce((acc, curr) => acc + (curr.ese > 0 ? 1 : 0), 0) / subjects.length * 100)
-    : 0;
+  const totalTopics = subjects.reduce((acc, s) => acc + (s.syllabus?.length || 0), 0);
+  const completedTopics = subjects.reduce((acc, s) => acc + (s.syllabus?.filter(t => t.isCompleted).length || 0), 0);
+  const overallCoverage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+  const caAvg = subjects.length > 0 ? (subjects.reduce((acc, s) => acc + (s.ca || 0), 0) / subjects.length).toFixed(1) : "0.0";
+  const mseAvg = subjects.length > 0 ? (subjects.reduce((acc, s) => acc + (s.mse || 0), 0) / subjects.length).toFixed(1) : "0.0";
 
   return (
     <div className="space-y-10">
@@ -21,17 +23,17 @@ export default function HomeView({ setActiveView }: { setActiveView: (v: any) =>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="theme-card p-6 border-zinc-800">
           <GraduationCap size={18} className="mb-4 text-white opacity-50" />
-          <h3 className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">CA 1 Average</h3>
-          <p className="text-3xl font-bold mt-1 tracking-tighter">18.4 <span className="text-xs font-normal opacity-20">/ 20</span></p>
+          <h3 className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">Continuous Assessment</h3>
+          <p className="text-3xl font-bold mt-1 tracking-tighter">{caAvg} <span className="text-xs font-normal opacity-20">/ 20</span></p>
           <div className="mt-6 w-full h-[1px] bg-zinc-900 rounded-full overflow-hidden">
-            <div className="h-full bg-white transition-all duration-1000" style={{ width: `92%` }} />
+            <div className="h-full bg-white transition-all duration-1000" style={{ width: `${(parseFloat(caAvg)/20)*100}%` }} />
           </div>
         </div>
 
         <div className="theme-card p-6 border-zinc-800">
           <Calendar size={18} className="mb-4 text-white opacity-50" />
-          <h3 className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">CA 2 Average</h3>
-          <p className="text-3xl font-bold mt-1 tracking-tighter">17.2 <span className="text-xs font-normal opacity-20">/ 20</span></p>
+          <h3 className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">Mid-Semester Exam</h3>
+          <p className="text-3xl font-bold mt-1 tracking-tighter">{mseAvg} <span className="text-xs font-normal opacity-20">/ 20</span></p>
           <button onClick={() => setActiveView('tasks')} className="mt-6 text-[9px] uppercase tracking-widest font-bold text-zinc-400 hover:text-white flex items-center group transition-colors">
             Manage Portfolio <ArrowRight size={10} className="ml-2 transition-transform group-hover:translate-x-1" />
           </button>
@@ -40,8 +42,8 @@ export default function HomeView({ setActiveView }: { setActiveView: (v: any) =>
         <div className="theme-card p-6 border-zinc-800">
           <CheckCircle size={18} className="mb-4 text-white opacity-50" />
           <h3 className="text-[10px] uppercase tracking-widest font-bold text-zinc-500">ESE Confidence</h3>
-          <p className="text-3xl font-bold mt-1 tracking-tighter">84%</p>
-          <p className="mt-6 text-[10px] text-zinc-600 italic">Analytical forecast based on CA performance</p>
+          <p className="text-3xl font-bold mt-1 tracking-tighter">{overallCoverage}%</p>
+          <p className="mt-6 text-[10px] text-zinc-600 italic">Analytical forecast based on syllabus coverage</p>
         </div>
       </div>
 
@@ -55,11 +57,16 @@ export default function HomeView({ setActiveView }: { setActiveView: (v: any) =>
               <div key={sub.id} className="p-5 bg-[#111111] border border-[#222222] rounded-lg hover:border-zinc-700 transition-all cursor-default group">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h4 className="font-bold text-sm text-zinc-300 group-hover:text-white transition-colors">{sub.name}</h4>
-                    <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-widest font-medium">Focus: {sub.topics[0]}</p>
+                    <h4 
+                      className="font-bold text-sm transition-colors"
+                      style={{ color: sub.color }}
+                    >{sub.name}</h4>
+                    <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-widest font-medium">
+                      Coverage: {sub.syllabus?.length > 0 ? Math.round((sub.syllabus.filter(t => t.isCompleted).length / sub.syllabus.length) * 100) : 0}%
+                    </p>
                   </div>
                   <div className="text-[10px] text-zinc-600 font-mono bg-black px-2 py-1 rounded">
-                    CA1: {sub.ca1}
+                    CA: {sub.ca} | MSE: {sub.mse}
                   </div>
                 </div>
               </div>

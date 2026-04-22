@@ -9,15 +9,16 @@ import {
   Settings,
   Menu,
   X,
-  Clipboard
+  Clipboard as ClipboardIcon
 } from 'lucide-react';
 import HomeView from './HomeView';
 import AcademicVault from './AcademicVault';
 import TaskManager from './TaskManager';
 import ResourceCenter from './ResourceCenter';
 import LiveClipboard from './LiveClipboard';
+import SyllabusTracker from './SyllabusTracker';
 
-type View = 'dashboard' | 'academic' | 'tasks' | 'resources' | 'clipboard';
+type View = 'dashboard' | 'academic' | 'tasks' | 'resources' | 'clipboard' | 'syllabus';
 
 export default function Dashboard() {
   const [activeView, setActiveView] = useState<View>('dashboard');
@@ -25,10 +26,11 @@ export default function Dashboard() {
 
   const navigation = [
     { id: 'dashboard', name: 'Overview', icon: LayoutDashboard },
-    { id: 'academic', name: 'Academic Vault', icon: BookOpen },
+    { id: 'academic', name: 'Academic Vault', icon: GraduationCap },
     { id: 'tasks', name: 'Task Manager', icon: Calendar },
+    { id: 'syllabus', name: 'Syllabus Tracker', icon: BookOpen },
     { id: 'resources', name: 'Resource Center', icon: FolderRoot },
-    { id: 'clipboard', name: 'Live Clipboard', icon: Clipboard },
+    { id: 'clipboard', name: 'Live Clipboard', icon: ClipboardIcon },
   ];
 
   const renderView = () => {
@@ -38,6 +40,7 @@ export default function Dashboard() {
       case 'tasks': return <TaskManager />;
       case 'resources': return <ResourceCenter />;
       case 'clipboard': return <LiveClipboard />;
+      case 'syllabus': return <SyllabusTracker />;
       default: return <HomeView setActiveView={setActiveView} />;
     }
   };

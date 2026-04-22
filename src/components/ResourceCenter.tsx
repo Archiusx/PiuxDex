@@ -10,9 +10,13 @@ import {
   ExternalLink,
   Code2,
   Cpu,
-  FolderRoot
+  FolderRoot,
+  X,
+  Eye,
+  Maximize2,
+  Download
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const RESOURCE_TYPES = [
   { id: 'pdf', name: 'PDF Document', icon: FileText, color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20' },
@@ -24,9 +28,14 @@ const RESOURCE_TYPES = [
 
 export default function ResourceCenter() {
   const resources = useLiveQuery(() => db.resources.toArray()) || [];
+  const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   const [type, setType] = useState('pdf');
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | undefined>(undefined);
+  const [selectedTopic, setSelectedTopic] = useState<string | undefined>(undefined);
+  const [viewingResource, setViewingResource] = useState<any>(null);
 
   const addResource = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,12 +43,19 @@ export default function ResourceCenter() {
     await db.resources.add({
       name,
       type: type as any,
-      url: '#',
+      url: url || '#',
+      subjectId: selectedSubjectId,
+      topicName: selectedTopic,
       addedAt: Date.now()
     });
     setName('');
+    setUrl('');
+    setSelectedSubjectId(undefined);
+    setSelectedTopic(undefined);
     setShowAdd(false);
   };
+
+  const activeSubject = subjects.find(s => s.id === selectedSubjectId);
 
   return (
     <div className="space-y-10">
@@ -63,16 +79,55 @@ export default function ResourceCenter() {
           className="p-8 theme-card border-zinc-800 bg-[#0a0a0a]"
         >
           <form onSubmit={addResource} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Material Label</label>
-              <input 
-                type="text" 
-                placeholder="Database_Management_Schema.pdf..."
-                className="w-full bg-black border border-zinc-800 rounded px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors text-white"
-                value={name}
-                onChange={e => setName(e.target.value)}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Material Label</label>
+                <input 
+                  type="text" 
+                  placeholder="Database_Management_Schema.pdf..."
+                  className="w-full bg-black border border-zinc-800 rounded px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors text-white"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Direct URL / Cloud Link</label>
+                <input 
+                  type="text" 
+                  placeholder="https://drive.google.com/your-file..."
+                  className="w-full bg-black border border-zinc-800 rounded px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors text-white"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                />
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Subject Association</label>
+                  <select 
+                    className="w-full bg-black border border-zinc-800 rounded px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors text-white appearance-none"
+                    value={selectedSubjectId || ''}
+                    onChange={e => setSelectedSubjectId(Number(e.target.value) || undefined)}
+                  >
+                    <option value="">General / None</option>
+                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+               </div>
+               <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Concept Linkage</label>
+                  <select 
+                    disabled={!activeSubject}
+                    className="w-full bg-black border border-zinc-800 rounded px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors text-white appearance-none disabled:opacity-30 disabled:cursor-not-allowed"
+                    value={selectedTopic || ''}
+                    onChange={e => setSelectedTopic(e.target.value)}
+                  >
+                    <option value="">Select Priority Topic</option>
+                    {activeSubject?.syllabus.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                  </select>
+               </div>
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {RESOURCE_TYPES.map(rt => (
                 <button
@@ -106,6 +161,13 @@ export default function ResourceCenter() {
             <motion.div
               layout
               key={res.id}
+              onClick={() => {
+                if (res.type === 'pdf' || res.type === 'pptx') {
+                  setViewingResource(res);
+                } else if (res.url && res.url !== '#') {
+                  window.open(res.url, '_blank');
+                }
+              }}
               className="theme-card p-6 py-8 hover:bg-[#151515] hover:border-zinc-700 transition-all cursor-pointer group flex flex-col items-center justify-center text-center space-y-6 shadow-2xl relative overflow-hidden"
             >
               <div className="absolute top-0 left-0 w-full h-1 opacity-20 bg-current overflow-hidden">
@@ -114,6 +176,17 @@ export default function ResourceCenter() {
 
               <div className={`w-16 h-20 border border-zinc-800 rounded-lg relative flex items-center justify-center transition-all group-hover:scale-105 group-hover:border-zinc-600 ${typeInfo.bg}`}>
                  <Icon size={32} className={`${typeInfo.color} opacity-80 group-hover:opacity-100 transition-opacity`} />
+                 <AnimatePresence>
+                   {(res.type === 'pdf' || res.type === 'pptx') && (
+                     <motion.div 
+                       initial={{ opacity: 0 }}
+                       whileHover={{ opacity: 1 }}
+                       className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm transition-opacity"
+                     >
+                        <Eye size={20} className="text-white" />
+                     </motion.div>
+                   )}
+                 </AnimatePresence>
                  <div className={`absolute top-2 right-2 w-3 h-3 rounded-sm border border-black/50 ${typeInfo.color.replace('text-', 'bg-')}`}></div>
                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#0a0a0a] rounded flex items-center justify-center border border-zinc-800 group-hover:border-zinc-600">
                     <Icon size={12} className={typeInfo.color} />
@@ -124,10 +197,17 @@ export default function ResourceCenter() {
                 <h3 className="font-bold text-[11px] tracking-tight text-zinc-300 group-hover:text-white transition-colors uppercase leading-tight line-clamp-2 max-w-[140px] h-[32px]">
                   {res.name}
                 </h3>
-                <div className="flex items-center justify-center space-x-2 text-[8px] text-zinc-600 font-mono tracking-widest group-hover:text-zinc-500 transition-colors">
-                   <span className="px-1.5 py-0.5 rounded border border-zinc-900 bg-black">{res.type.toUpperCase()}</span>
-                   <span>•</span>
-                   <span>ID: {res.id?.toString().padStart(3, '0')}</span>
+                <div className="flex flex-col space-y-1">
+                  <div className="flex items-center justify-center space-x-2 text-[8px] text-zinc-600 font-mono tracking-widest group-hover:text-zinc-500 transition-colors">
+                     <span className="px-1.5 py-0.5 rounded border border-zinc-900 bg-black">{res.type.toUpperCase()}</span>
+                     <span>•</span>
+                     <span>ID: {res.id?.toString().padStart(3, '0')}</span>
+                  </div>
+                  {res.topicName && (
+                    <div className="text-[7px] text-zinc-700 uppercase font-bold tracking-[0.2em] group-hover:text-zinc-400 transition-colors">
+                      {res.topicName}
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -166,6 +246,112 @@ export default function ResourceCenter() {
            Waiting for peer synchronization...
          </p>
       </section>
+
+      {/* Resource Viewer Modal */}
+      <AnimatePresence>
+        {viewingResource && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-10 bg-black/95 backdrop-blur-xl"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full h-full theme-card overflow-hidden flex flex-col border-zinc-800"
+            >
+              <div className="bg-[#111] p-4 border-b border-zinc-800 flex justify-between items-center">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-10 h-10 rounded flex items-center justify-center ${RESOURCE_TYPES.find(t => t.id === viewingResource.type)?.bg}`}>
+                    {React.createElement(RESOURCE_TYPES.find(t => t.id === viewingResource.type)?.icon || FileText, { 
+                      size: 20, 
+                      className: RESOURCE_TYPES.find(t => t.id === viewingResource.type)?.color 
+                    })}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm tracking-tight text-white uppercase">{viewingResource.name}</h3>
+                    <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">Viewing Global Research Material</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {viewingResource.url !== '#' && (
+                    <button 
+                      onClick={() => window.open(viewingResource.url, '_blank')}
+                      className="p-2 text-zinc-400 hover:text-white bg-zinc-900 rounded"
+                      title="Open in new window"
+                    >
+                      <ExternalLink size={18} />
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setViewingResource(null)}
+                    className="p-2 text-zinc-400 hover:text-white bg-zinc-900 rounded"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 bg-black relative flex flex-col">
+                <div className="flex-1 relative">
+                  {viewingResource.url && viewingResource.url !== '#' ? (
+                    <div className="w-full h-full">
+                      {viewingResource.type === 'pdf' ? (
+                        <iframe 
+                          src={viewingResource.url}
+                          className="w-full h-full border-none bg-zinc-900"
+                          title="PDF Viewer"
+                        />
+                      ) : (
+                        <iframe 
+                          src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewingResource.url)}`}
+                          className="w-full h-full border-none"
+                          title="Office Viewer"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 text-zinc-700">
+                      <Maximize2 size={48} className="opacity-10" />
+                      <p className="text-[10px] uppercase tracking-[0.3em] font-bold">Offline Reference • Manual URL Required</p>
+                    </div>
+                  )}
+                </div>
+                
+                {viewingResource.url && viewingResource.url !== '#' && (
+                  <div className="p-4 bg-[#0a0a0a] border-t border-zinc-900 flex justify-center space-x-6">
+                    <div className="flex items-center space-x-2">
+                       <span className="text-[9px] text-zinc-600 uppercase font-bold tracking-widest leading-none">External Link Gateway:</span>
+                       <a 
+                         href={viewingResource.url} 
+                         target="_blank" 
+                         rel="noopener noreferrer"
+                         className="text-[10px] underline text-zinc-400 hover:text-white transition-colors flex items-center"
+                       >
+                         Open Original <ExternalLink size={10} className="ml-1" />
+                       </a>
+                    </div>
+                    {viewingResource.type === 'pdf' && (
+                       <div className="flex items-center space-x-2">
+                          <span className="text-[9px] text-zinc-600 uppercase font-bold tracking-widest leading-none">Native Viewer:</span>
+                          <a 
+                            href={`https://docs.google.com/viewer?url=${encodeURIComponent(viewingResource.url)}&embedded=true`}
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[10px] underline text-zinc-400 hover:text-white transition-colors flex items-center"
+                          >
+                            Web Alternate <Eye size={10} className="ml-1" />
+                          </a>
+                       </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
 
   );
