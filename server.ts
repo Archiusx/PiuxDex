@@ -15,7 +15,26 @@ async function startServer() {
     updatedBy: "System"
   };
 
+  // Global Shared Resources
+  let globalResources: any[] = [];
+
   // API Routes
+  app.get("/api/resources", (req, res) => {
+    res.json(globalResources);
+  });
+
+  app.post("/api/resources", (req, res) => {
+    const resource = req.body;
+    if (resource && resource.name) {
+      globalResources.unshift(resource);
+      // Keep only last 50 resources to manage memory
+      if (globalResources.length > 50) globalResources.pop();
+      res.json({ success: true, resources: globalResources });
+    } else {
+      res.status(400).json({ error: "Invalid resource data" });
+    }
+  });
+
   app.get("/api/clipboard", (req, res) => {
     res.json(globalClipboard);
   });

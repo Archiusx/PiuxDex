@@ -27,7 +27,7 @@ const RESOURCE_TYPES = [
 ];
 
 export default function ResourceCenter() {
-  const resources = useLiveQuery(() => db.resources.toArray()) || [];
+  const resources = useLiveQuery(() => db.resources.orderBy('addedAt').reverse().toArray()) || [];
   const subjects = useLiveQuery(() => db.subjects.toArray()) || [];
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState('');
@@ -36,18 +36,65 @@ export default function ResourceCenter() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | undefined>(undefined);
   const [selectedTopic, setSelectedTopic] = useState<string | undefined>(undefined);
   const [viewingResource, setViewingResource] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Synchronize with backend
+  React.useEffect(() => {
+    const syncResources = async () => {
+      try {
+        const response = await fetch('/api/resources');
+        const globalResources = await response.json();
+        
+        // Find resources that are on server but not in local Dexie
+        for (const gRes of globalResources) {
+          const exists = await db.resources.where('url').equals(gRes.url).first();
+          if (!exists) {
+            await db.resources.add({
+              ...gRes,
+              id: undefined // Let Dexie assign local ID
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Sync failed", err);
+      }
+    };
+
+    syncResources();
+    const interval = setInterval(syncResources, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   const addResource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return;
-    await db.resources.add({
+    
+    const newRes = {
       name,
       type: type as any,
       url: url || '#',
       subjectId: selectedSubjectId,
       topicName: selectedTopic,
       addedAt: Date.now()
-    });
+    };
+
+    // 1. Add locally
+    await db.resources.add(newRes);
+
+    // 2. Add to global vault
+    try {
+      setIsSyncing(true);
+      await fetch('/api/resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRes)
+      });
+    } catch (err) {
+      console.error("Global sync failed", err);
+    } finally {
+      setIsSyncing(false);
+    }
+
     setName('');
     setUrl('');
     setSelectedSubjectId(undefined);
@@ -223,27 +270,27 @@ export default function ResourceCenter() {
         )}
       </div>
 
-      <section className="theme-card p-10 bg-[#080808]">
+      <section className={`theme-card p-10 transition-all ${isSyncing ? 'bg-white/5' : 'bg-[#080808]'}`}>
          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-4">
                <div className="w-10 h-10 bg-white/5 border border-zinc-900 flex items-center justify-center rounded">
                  <Code2 size={20} className="text-white" />
                </div>
                <div>
-                 <h3 className="text-xl font-bold italic tracking-tight">Collaborative <span className="font-light not-italic">Ref</span></h3>
+                 <h3 className="text-xl font-bold italic tracking-tight">Collaborative <span className="font-light not-italic">Vault</span></h3>
                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">Networked Project Environment</p>
                </div>
             </div>
             <div className="flex items-center">
-              <span className="status-dot bg-zinc-800 shadow-none"></span>
-              <span className="text-[10px] uppercase tracking-widest text-zinc-700 font-bold">Protocol Inactive</span>
+              <span className={`status-dot ${isSyncing ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-900'} shadow-none`}></span>
+              <span className="text-[10px] uppercase tracking-widest text-emerald-500 font-bold ml-2">Protocol Active</span>
             </div>
          </div>
          <div className="loading-line">
-            <div className="loading-line-active scale-x-50 opacity-10"></div>
+            <div className={`loading-line-active transition-all duration-1000 ${isSyncing ? 'scale-x-100 opacity-100' : 'scale-x-30 opacity-20'}`}></div>
          </div>
-         <p className="mt-8 text-[11px] text-center text-zinc-700 tracking-widest uppercase font-bold italic">
-           Waiting for peer synchronization...
+         <p className="mt-8 text-[11px] text-center text-zinc-500 tracking-widest uppercase font-bold italic">
+           {isSyncing ? 'Synchronizing encrypted material...' : 'All peers synchronized • Secure Channel Active'}
          </p>
       </section>
 

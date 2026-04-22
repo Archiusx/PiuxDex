@@ -49,7 +49,7 @@ export class PiuxDexDatabase extends Dexie {
     this.version(2).stores({
       subjects: '++id, name, code',
       tasks: '++id, title, date, priority',
-      resources: '++id, name, type, subjectId'
+      resources: '++id, name, type, subjectId, url'
     });
   }
 }
