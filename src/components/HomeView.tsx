@@ -85,7 +85,12 @@ export default function HomeView({ setActiveView }: { setActiveView: (v: any) =>
             Subject Performance
           </h3>
           <div className="space-y-4">
-            {subjects.slice(0, 4).map(sub => (
+            {subjects.length === 0 ? (
+              <div className="p-8 theme-card border-dashed border-zinc-800 text-center space-y-4">
+                 <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest leading-none">No active study modules</p>
+                 <button onClick={() => setActiveView('syllabus')} className="text-[10px] bg-white text-black px-4 py-2 rounded-full font-bold uppercase tracking-widest hover:scale-105 transition-transform">Initialize Cloud Identity</button>
+              </div>
+            ) : subjects.slice(0, 4).map(sub => (
               <div key={sub.id} className="p-5 bg-[#111111] border border-[#222222] rounded-lg hover:border-zinc-700 transition-all cursor-default group">
                 <div className="flex justify-between items-center">
                   <div>

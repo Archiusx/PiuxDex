@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, Subject, SyllabusTopic } from '../db';
+import { db, Subject, SyllabusTopic, seedDatabase } from '../db';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   CheckCircle2, 
@@ -13,7 +13,9 @@ import {
   Save,
   Plus,
   Trophy,
-  Target
+  Target,
+  RefreshCw,
+  GraduationCap
 } from 'lucide-react';
 
 import { collection, query, where, onSnapshot, doc, updateDoc, setDoc, getDocs } from 'firebase/firestore';
@@ -74,16 +76,27 @@ export default function SyllabusTracker() {
   const syncCurriculum = async () => {
     if (!user) return;
     setLoading(true);
-    const localSubs = await db.subjects.toArray();
-    for (const s of localSubs) {
-      await setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
-        ...s,
-        id: undefined, 
-        userId: user.uid,
-        originalId: s.id
-      });
+    try {
+      // Ensure local DB is seeded if empty
+      const localCount = await db.subjects.count();
+      if (localCount === 0) {
+        await seedDatabase();
+      }
+      
+      const localSubs = await db.subjects.toArray();
+      for (const s of localSubs) {
+        await setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
+          ...s,
+          id: undefined, 
+          userId: user.uid,
+          originalId: s.id
+        });
+      }
+    } catch (err) {
+      console.error("Sync failed", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (!user) return (
@@ -124,46 +137,66 @@ export default function SyllabusTracker() {
         </div>
       </header>
 
-      {/* Subject Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {subjects.map(subject => {
-          const completed = subject.syllabus?.filter(t => t.isCompleted).length || 0;
-          const total = subject.syllabus?.length || 0;
-          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-          
-          return (
-            <motion.button
-              layout
-              key={subject.id}
-              onClick={() => setSelectedSubjectId(subject.id || null)}
-              className={`theme-card p-4 transition-all text-left relative overflow-hidden group ${
-                selectedSubjectId === subject.id ? 'border-white bg-[#111]' : 'hover:border-zinc-700'
-              }`}
-            >
-              <div 
-                className="absolute top-0 left-0 w-full h-1 opacity-20"
-                style={{ backgroundColor: subject.color }}
-              />
-              <div className="flex justify-between items-start mb-4">
+      {/* Subject Grid or Empty State */}
+      {subjects.length === 0 ? (
+        <div className="theme-card p-12 text-center border-dashed border-zinc-800 space-y-6">
+           <div className="p-4 bg-zinc-900 w-16 h-16 rounded-2xl mx-auto text-zinc-600 flex items-center justify-center">
+             <GraduationCap size={32} />
+           </div>
+           <div className="space-y-2">
+             <h3 className="text-xl font-bold tracking-tight italic">Academic Vault <span className="font-light not-italic text-zinc-600 underline decoration-zinc-800">Empty</span></h3>
+             <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-bold max-w-sm mx-auto">Your cloud identity has no active curriculum data. Initialize your local node with the official 2025 DBATU syllabus extraction.</p>
+           </div>
+           <button 
+            onClick={syncCurriculum}
+            disabled={loading}
+            className="px-8 py-3 bg-white text-black text-[10px] font-bold uppercase tracking-widest rounded-full hover:scale-105 transition-transform disabled:opacity-50 flex items-center mx-auto space-x-2"
+           >
+             {loading && <RefreshCw size={12} className="animate-spin mr-2" />}
+             <span>{loading ? 'Booting Node...' : 'Initialize Modules'}</span>
+           </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {subjects.map(subject => {
+            const completed = subject.syllabus?.filter(t => t.isCompleted).length || 0;
+            const total = subject.syllabus?.length || 0;
+            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+            
+            return (
+              <motion.button
+                layout
+                key={subject.id}
+                onClick={() => setSelectedSubjectId(subject.id || null)}
+                className={`theme-card p-4 transition-all text-left relative overflow-hidden group ${
+                  selectedSubjectId === subject.id ? 'border-white bg-[#111]' : 'hover:border-zinc-700'
+                }`}
+              >
                 <div 
-                  className="w-10 h-10 rounded flex items-center justify-center text-[10px] font-bold"
-                  style={{ backgroundColor: `${subject.color}22`, color: subject.color, border: `1px solid ${subject.color}44` }}
-                >
-                  {subject.code.slice(-3)}
+                  className="absolute top-0 left-0 w-full h-1 opacity-20"
+                  style={{ backgroundColor: subject.color }}
+                />
+                <div className="flex justify-between items-start mb-4">
+                  <div 
+                    className="w-10 h-10 rounded flex items-center justify-center text-[10px] font-bold"
+                    style={{ backgroundColor: `${subject.color}22`, color: subject.color, border: `1px solid ${subject.color}44` }}
+                  >
+                    {subject.code.slice(-3)}
+                  </div>
+                  <span className="text-[9px] font-mono text-zinc-600">{completed}/{total}</span>
                 </div>
-                <span className="text-[9px] font-mono text-zinc-600">{completed}/{total}</span>
-              </div>
-              <h3 className="text-xs font-bold uppercase tracking-tight line-clamp-2 h-8 mb-4 leading-tight group-hover:text-white transition-colors">
-                {subject.name}
-              </h3>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold font-mono">{pct}%</span>
-                <ProgressRing size={24} stroke={3} progress={pct} color={subject.color} />
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
+                <h3 className="text-xs font-bold uppercase tracking-tight line-clamp-2 h-8 mb-4 leading-tight group-hover:text-white transition-colors">
+                  {subject.name}
+                </h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold font-mono">{pct}%</span>
+                  <ProgressRing size={24} stroke={3} progress={pct} color={subject.color} />
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Detailed Syllabus View */}
       <AnimatePresence mode="wait">
