@@ -13,10 +13,9 @@ service cloud.firestore {
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
-    // Auth Check for Admin (Bootstrap adityadeshakar@gmail.com)
+    // Auth Check for Admin (Now via PIN-verified Admin Document)
     function isAdmin() { 
       return isSignedIn() && (
-        request.auth.token.email == 'adityadeshakar@gmail.com' || 
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -81,10 +80,11 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidClipboard(incoming());
     }
     
-    // Admin list setup (only writable by owner email)
+    // Admin list setup (Unlockable via PIN 9763)
     match /admins/{adminId} {
       allow read: if isSignedIn();
-      allow write: if request.auth.token.email == 'adityadeshakar@gmail.com';
+      allow create: if isSignedIn() && adminId == request.auth.uid && incoming().pin == '9763';
+      allow delete: if isSignedIn() && adminId == request.auth.uid;
     }
   }
 }

@@ -25,7 +25,7 @@ import { useAuth } from '../AuthContext';
 export default function Dashboard() {
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, isAdmin, unlockAdmin } = useAuth();
 
   const navigation = [
     { id: 'dashboard', name: 'Overview', icon: LayoutDashboard },
@@ -100,10 +100,26 @@ export default function Dashboard() {
             ) : (
               <div className="mb-6 flex items-center space-x-3 group">
                  <img src={user.photoURL || ''} alt="PR" className="w-8 h-8 rounded border border-zinc-800" />
-                 <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-white truncate uppercase">{user.displayName}</p>
-                    <button onClick={logout} className="text-[8px] text-zinc-500 hover:text-white uppercase tracking-widest font-bold">Disconnect</button>
-                 </div>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-[10px] font-bold text-white truncate uppercase">{user.displayName}</p>
+                      <div className="flex items-center space-x-2">
+                        <button onClick={logout} className="text-[8px] text-zinc-500 hover:text-white uppercase tracking-widest font-bold">Disconnect</button>
+                        {!isAdmin && (
+                          <button 
+                            onClick={() => {
+                              const p = prompt('ENTER OVERRIDE PIN:');
+                              if (p) unlockAdmin(p);
+                            }}
+                            className="text-[8px] text-zinc-700 hover:text-blue-400 uppercase tracking-widest font-bold border-l border-zinc-900 pl-2"
+                          >
+                            Override
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <span className="text-[8px] text-yellow-500 uppercase tracking-widest font-bold border-l border-zinc-900 pl-2">ROOT ACTIVE</span>
+                        )}
+                      </div>
+                    </div>
               </div>
             )}
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-2">BTECH SEM 4 • DBATU</p>
