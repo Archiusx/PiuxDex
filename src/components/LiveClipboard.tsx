@@ -15,6 +15,7 @@ export default function LiveClipboard() {
   const [syncing, setSyncing] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [stream, setStream] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
   const { user, login } = useAuth();
   const lastLocalValue = React.useRef<string>('');
 
@@ -38,9 +39,9 @@ export default function LiveClipboard() {
     return unsub;
   }, []);
 
-  // 2. Global Stream Listener (The "Chat")
+  // 2. Global Stream Listener (The Live Chat)
   useEffect(() => {
-    const q = query(collection(fdb, 'clipboard_stream'), orderBy('timestamp', 'desc'), limit(20));
+    const q = query(collection(fdb, 'clipboard_stream'), orderBy('timestamp', 'asc'), limit(50));
     const unsub = onSnapshot(q, (snap) => {
       setStream(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -69,8 +70,33 @@ export default function LiveClipboard() {
     }
   };
 
+  const sendChatMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!user || !chatInput.trim()) return;
+    
+    const msgContent = chatInput;
+    setChatInput('');
+    setSyncing(true);
+    try {
+      await addDoc(collection(fdb, 'clipboard_stream'), {
+        content: msgContent,
+        author: user.displayName,
+        authorPhoto: user.photoURL,
+        timestamp: Date.now(),
+        serverTimestamp: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Chat push failed", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const pushToStream = async () => {
     if (!user || !content.trim()) return;
+    setChatInput(content);
+    // Let sendChatMessage handle the heavy lifting
+    // But we might want to just push directly here for shortcut
     setSyncing(true);
     try {
       await addDoc(collection(fdb, 'clipboard_stream'), {
@@ -80,8 +106,6 @@ export default function LiveClipboard() {
         timestamp: Date.now(),
         serverTimestamp: serverTimestamp()
       });
-      // Optionally clear after push to stream? 
-      // User said "no locks", so let's just keep it as a history push
     } catch (err) {
       console.error("Stream push failed", err);
     } finally {
@@ -184,48 +208,74 @@ export default function LiveClipboard() {
         </div>
       </div>
 
-      {/* Global Stream (Chat-like Section) */}
-      <div className="space-y-6">
+      {/* Global Stream (Live Chat Section) */}
+      <div className="space-y-6 flex flex-col h-[700px]">
         <header>
-          <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-zinc-500 mb-1">Global Stream</h3>
-          <p className="text-[10px] text-zinc-700 italic">Chronological broadcast history</p>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-zinc-500 mb-1">Live Global Chat</h3>
+          </div>
+          <p className="text-[10px] text-zinc-700 italic">Chronological worldwide node activity</p>
         </header>
 
-        <div className="space-y-4 h-[650px] overflow-y-auto pr-2 custom-scrollbar">
-          {stream.length === 0 && (
-            <div className="py-10 text-center opacity-20">
-               <Share2 size={24} className="mx-auto mb-2" />
-               <p className="text-[10px] uppercase font-bold tracking-widest">Stream Empty</p>
-            </div>
-          )}
-          {stream.map((msg) => (
-            <motion.div 
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              key={msg.id} 
-              className="theme-card p-4 border-zinc-900 bg-[#080808] space-y-3 group hover:border-zinc-700 transition-colors"
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex items-center space-x-2">
-                  <img src={msg.authorPhoto} alt="" className="w-5 h-5 rounded-full ring-1 ring-zinc-800" />
-                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">{msg.author}</span>
+        <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar flex flex-col-reverse">
+          <div className="space-y-4">
+            {stream.length === 0 && (
+              <div className="py-20 text-center opacity-20">
+                 <Share2 size={24} className="mx-auto mb-2" />
+                 <p className="text-[10px] uppercase font-bold tracking-widest">Stream Empty</p>
+              </div>
+            )}
+            {stream.map((msg) => (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                key={msg.id} 
+                className={`theme-card p-4 border-zinc-900 space-y-2 group hover:border-zinc-700 transition-colors ${msg.author === user.displayName ? 'bg-zinc-900/40 border-zinc-800' : 'bg-[#080808]'}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center space-x-2">
+                    <img src={msg.authorPhoto} alt="" className="w-5 h-5 rounded-full ring-1 ring-zinc-800" />
+                    <span className={`text-[9px] font-bold uppercase tracking-tighter ${msg.author === user.displayName ? 'text-white' : 'text-zinc-500'}`}>
+                      {msg.author || 'Anonymous'}
+                    </span>
+                  </div>
+                  <span className="text-[8px] font-mono text-zinc-700 uppercase">
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
-                <span className="text-[8px] font-mono text-zinc-700 uppercase">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-              <p className="text-xs text-zinc-300 font-mono leading-relaxed break-words whitespace-pre-wrap line-clamp-4 group-hover:line-clamp-none transition-all">
-                {msg.content}
-              </p>
-              <div className="flex justify-end pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <button 
-                  onClick={() => handleCopy(msg.content)}
-                  className="text-[8px] uppercase font-bold tracking-widest text-zinc-500 hover:text-white"
-                 >
-                   Inject to Local
-                 </button>
-              </div>
-            </motion.div>
-          ))}
+                <p className="text-xs text-zinc-300 font-mono leading-relaxed break-words whitespace-pre-wrap">
+                  {msg.content}
+                </p>
+                <div className="flex justify-end pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <button 
+                    onClick={() => handleCopy(msg.content)}
+                    className="text-[8px] uppercase font-bold tracking-widest text-zinc-500 hover:text-white"
+                   >
+                     Inject to Local
+                   </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
+
+        {/* Chat Input */}
+        <form onSubmit={sendChatMessage} className="relative group mt-auto">
+           <input 
+            type="text" 
+            placeholder="Broadcast to Global Node..."
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            className="w-full bg-black border border-zinc-900 rounded-full px-6 py-4 text-xs font-mono text-zinc-300 focus:outline-none focus:border-blue-500/50 transition-all group-hover:border-zinc-800"
+           />
+           <button 
+            type="submit"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 px-4 bg-zinc-900 text-white rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all"
+           >
+             Send
+           </button>
+        </form>
       </div>
     </div>
   );
