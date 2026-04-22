@@ -1,11 +1,22 @@
-<div align="center">
+# Piux Dex - Academic Resource Management System
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+A high-performance workspace designed tailored for DBATU B.Tech students, balancing sophisticated design with practical academic utility.
 
-  <h1>Built with AI Studio</h2>
+## Key Features
+- **Academic Vault**: Tracks CA1, CA2, and ESE marks with automatic progress forecasting.
+- **Resource Vault**: Shared repository for PDFs, PPTs, C Code, and Algorithms with high-fidelity icons.
+- **Time Table**: Optimized schedule management for dynamic study plans.
+- **Live Clipboard**: Real-time cross-device shared space for snippets and URLs.
+- **IDB Persistence**: Local storage ensures your personalized data stays in your browser.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Tech Stack
+- **Frontend**: React 19, Tailwind CSS, Motion.
+- **State/Storage**: IndexedDB (via Dexie), React Hooks.
+- **Backend**: Express.js (Real-time Clipboard API).
+- **Design**: Sophisticated Dark Theme with DM Sans typography.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Configuration
+The application is built for B.Tech 4th Semester (DBATU). You can refactor subjects and focus areas directly from the **Academic Vault**.
 
-</div>
+---
+*Created with focus on Piyush Deshkar World connectivity.*

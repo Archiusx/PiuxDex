@@ -1,0 +1,9 @@
+{
+  "name": "Piux Dex",
+  "description": "E-Right Resource Management system for DBATU B.Tech Students. Features task scheduling, resource tracking, and academic progress management.",
+  "requestFramePermissions": [
+    "clipboard-read",
+    "clipboard-write"
+  ],
+  "majorCapabilities": []
+}
