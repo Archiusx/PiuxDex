@@ -13,19 +13,22 @@ export default function LiveClipboard() {
   const [copying, setCopying] = useState(false);
   const [pastingError, setPastingError] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [stream, setStream] = useState<any[]>([]);
   const { user, login } = useAuth();
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const lastLocalValue = React.useRef<string>('');
 
-  // 1. Shared Buffer Listener (The textarea)
+  // 1. Shared Buffer Listener (Direct Overwrite Mode)
   useEffect(() => {
     const unsub = onSnapshot(doc(fdb, 'clipboard', 'global'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (!isFocused) {
-          setContent(data.content || '');
+        const remoteContent = data.content || '';
+        
+        // Overwrite local state if server has new data that we didn't just send
+        if (remoteContent !== lastLocalValue.current) {
+          setContent(remoteContent);
+          lastLocalValue.current = remoteContent;
           setLastUpdated(data.lastUpdated || 0);
           setUpdatedBy(data.updatedBy || 'Peer');
         }
@@ -33,7 +36,7 @@ export default function LiveClipboard() {
       setLoading(false);
     });
     return unsub;
-  }, [isFocused]);
+  }, []);
 
   // 2. Global Stream Listener (The "Chat")
   useEffect(() => {
@@ -44,24 +47,16 @@ export default function LiveClipboard() {
     return unsub;
   }, []);
 
-  // 3. High-Speed debounced auto-sync (The Live "Person typing" feel)
-  useEffect(() => {
-    if (isDirty && !syncing) {
-      const timeout = setTimeout(() => {
-        handleUpdate();
-      }, 400); // Super fast 400ms debounce
-      return () => clearTimeout(timeout);
-    }
-  }, [content]);
-
-  const handleUpdate = async (newVal?: string) => {
+  const handleUpdate = async (val: string) => {
     if (!user) return;
-    const textToPush = newVal !== undefined ? newVal : content;
+    lastLocalValue.current = val;
+    setContent(val);
+    setIsDirty(true);
     
     try {
       const pushTime = Date.now();
       await setDoc(doc(fdb, 'clipboard', 'global'), {
-        content: textToPush,
+        content: val,
         lastUpdated: pushTime,
         updatedBy: user.displayName || user.email || 'Anonymous',
         serverTimestamp: serverTimestamp()
@@ -172,15 +167,9 @@ export default function LiveClipboard() {
           </div>
           
           <textarea 
-            ref={textareaRef}
             className="w-full h-[500px] bg-black p-10 text-zinc-200 font-mono text-base focus:outline-none resize-none leading-relaxed custom-scrollbar selection:bg-blue-500/30"
             value={content}
-            onChange={(e) => {
-              setContent(e.target.value);
-              setIsDirty(true);
-            }}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onChange={(e) => handleUpdate(e.target.value)}
             placeholder="Type anything... anyone can see this LIVE worldwide."
           />
 
