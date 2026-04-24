@@ -34,21 +34,15 @@ export default function SyllabusTracker() {
     
     const q = query(collection(fdb, 'userSubjects'), where('userId', '==', user.uid));
     const unsub = onSnapshot(q, async (snap) => {
-      if (snap.empty) {
-        // First time initialization: Clone from local DB to default cloud state
-        const localSubs = await db.subjects.toArray();
-        for (const s of localSubs) {
-          await setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
-            ...s,
-            id: undefined, // Let Firestore use its own structure
-            userId: user.uid,
-            originalId: s.id
-          });
-        }
-      } else {
+      if (!snap.empty) {
         const cloudSubs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
         setSubjects(cloudSubs);
+      } else {
+        setSubjects([]);
       }
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore Node: Syllabus read failed", err);
       setLoading(false);
     });
 
@@ -70,7 +64,11 @@ export default function SyllabusTracker() {
       t.name === topicName ? { ...t, isCompleted: !t.isCompleted } : t
     );
     
-    await updateDoc(doc(fdb, 'userSubjects', subjectId), { syllabus: newSyllabus });
+    try {
+      await updateDoc(doc(fdb, 'userSubjects', subjectId), { syllabus: newSyllabus });
+    } catch (err) {
+      console.error("Update failed", err);
+    }
   };
 
   const syncCurriculum = async () => {
@@ -84,16 +82,19 @@ export default function SyllabusTracker() {
       }
       
       const localSubs = await db.subjects.toArray();
-      for (const s of localSubs) {
-        await setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
+      const syncPromises = localSubs.map(s => 
+        setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
           ...s,
           id: undefined, 
           userId: user.uid,
           originalId: s.id
-        });
-      }
+        })
+      );
+
+      await Promise.all(syncPromises);
+      console.log("Firestore Node: Syllabus Synchronized");
     } catch (err) {
-      console.error("Sync failed", err);
+      console.error("Syllabus sync failed", err);
     } finally {
       setLoading(false);
     }

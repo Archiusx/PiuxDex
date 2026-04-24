@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Key, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Shield, Key, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 interface GatekeeperProps {
   onUnlock: () => void;
 }
 
 export default function Gatekeeper({ onUnlock }: GatekeeperProps) {
+  const { unlockAdmin, user } = useAuth();
   const [pin, setPin] = useState(['', '', '', '']);
   const [error, setError] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [attempts, setAttempts] = useState(0);
 
   const handleInput = (val: string, index: number) => {
@@ -33,21 +36,43 @@ export default function Gatekeeper({ onUnlock }: GatekeeperProps) {
   };
 
   useEffect(() => {
-    if (pin.every(digit => digit !== '')) {
-      const entry = pin.join('');
-      if (entry === '9763') {
-        onUnlock();
-      } else {
-        setError(true);
-        setAttempts(prev => prev + 1);
-        setTimeout(() => {
-          setPin(['', '', '', '']);
-          setError(false);
-          document.getElementById('pin-0')?.focus();
-        }, 1000);
+    const verify = async () => {
+      if (pin.every(digit => digit !== '')) {
+        const entry = pin.join('');
+        setIsVerifying(true);
+        
+        try {
+          // If user is logged in, try elevating to Admin in Cloud
+          if (user) {
+            const success = await unlockAdmin(entry);
+            if (success) {
+              onUnlock();
+              return;
+            }
+          } else if (entry === '9763') {
+            // Local fallback if no user node yet
+            onUnlock();
+            return;
+          }
+
+          // Error state
+          setError(true);
+          setAttempts(prev => prev + 1);
+          setTimeout(() => {
+            setPin(['', '', '', '']);
+            setError(false);
+            document.getElementById('pin-0')?.focus();
+          }, 1000);
+        } catch (err) {
+          setError(true);
+        } finally {
+          setIsVerifying(false);
+        }
       }
-    }
-  }, [pin, onUnlock]);
+    };
+    
+    verify();
+  }, [pin, onUnlock, unlockAdmin, user]);
 
   return (
     <div className="fixed inset-0 bg-black flex items-center justify-center z-[100] px-6">
@@ -62,7 +87,11 @@ export default function Gatekeeper({ onUnlock }: GatekeeperProps) {
       >
         <div className="text-center space-y-4">
           <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-8 relative">
-             <Shield className={`text-white transition-colors duration-300 ${error ? 'text-red-500' : ''}`} size={24} />
+             {isVerifying ? (
+               <Loader2 className="animate-spin text-white" size={24} />
+             ) : (
+               <Shield className={`text-white transition-colors duration-300 ${error ? 'text-red-500' : ''}`} size={24} />
+             )}
              {error && (
                <motion.div 
                  initial={{ opacity: 0, scale: 0.5 }}

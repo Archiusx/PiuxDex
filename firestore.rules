@@ -25,9 +25,14 @@ service cloud.firestore {
       return data.name is string && data.name.size() <= 100 &&
              data.code is string && data.code.size() <= 20 &&
              data.color is string && data.color.size() <= 10 &&
-             data.syllabus is list && data.syllabus.size() <= 20;
+             data.syllabus is list && data.syllabus.size() <= 60;
     }
 
+    function isValidUserSubject(data) {
+      return isValidSubject(data) && 
+             data.userId == request.auth.uid;
+    }
+    
     function isValidTask(data) {
       return data.title is string && data.title.size() <= 200 &&
              data.priority in ['low', 'medium', 'high'] &&
@@ -42,33 +47,41 @@ service cloud.firestore {
     }
 
     function isValidClipboard(data) {
-      return data.content is string && data.content.size() <= 10000;
+      return data.content is string && data.content.size() <= 20000;
     }
 
     // -- COLLECTIONS --
+
+    match /test/connection {
+      allow read: if true;
+    }
 
     match /subjects/{subjectId} {
       allow read: if isSignedIn();
       allow write: if isAdmin() && isValidSubject(incoming()) && isValidId(subjectId);
     }
 
+    match /userSubjects/{uSubId} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid) && isValidId(uSubId);
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && 
+                       (incoming().userId == request.auth.uid);
+    }
+
     match /tasks/{taskId} {
-      // Secure List: evaluating resource.data against auth.uid
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow get: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       
-      allow create: if isSignedIn() && isValidTask(incoming()) && isValidId(taskId);
+      allow create: if isSignedIn() && incoming().ownerId == request.auth.uid && isValidId(taskId);
       allow update: if isSignedIn() && resource.data.ownerId == request.auth.uid && 
-                       isValidTask(incoming()) &&
-                       incoming().ownerId == existing().ownerId;
+                       incoming().ownerId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 
     match /resources/{resourceId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidResource(incoming()) && isValidId(resourceId);
+      allow create: if isSignedIn() && incoming().creatorId == request.auth.uid && isValidId(resourceId);
       allow update: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin()) && 
-                       isValidResource(incoming()) &&
                        incoming().creatorId == existing().creatorId;
       allow delete: if isSignedIn() && (resource.data.creatorId == request.auth.uid || isAdmin());
     }
@@ -80,7 +93,7 @@ service cloud.firestore {
 
     match /clipboard_stream/{msgId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn(); // Add more validation if needed
+      allow create: if isSignedIn(); 
     }
     
     // Admin list setup (Unlockable via PIN 9763)

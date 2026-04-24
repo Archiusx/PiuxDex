@@ -21,11 +21,13 @@ export default function TaskManager() {
     if (!user) return;
     const q = query(
       collection(fdb, 'tasks'), 
-      where('ownerId', '==', user.uid),
-      orderBy('date', 'asc')
+      where('ownerId', '==', user.uid)
     );
     const unsub = onSnapshot(q, (snap) => {
-      setFirestoreTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      // Client-side sorting to avoid index requirement
+      tasks.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      setFirestoreTasks(tasks);
       setLoading(false);
     });
     return unsub;
