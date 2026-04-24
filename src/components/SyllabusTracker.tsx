@@ -39,6 +39,8 @@ export default function SyllabusTracker() {
         setSubjects(cloudSubs);
       } else {
         setSubjects([]);
+        // Auto-sync if cloud is empty but user is logged in
+        syncCurriculum();
       }
       setLoading(false);
     }, (err) => {
@@ -72,29 +74,46 @@ export default function SyllabusTracker() {
   };
 
   const syncCurriculum = async () => {
-    if (!user) return;
+    if (!user) {
+      console.warn("Attempted sync without auth");
+      return;
+    }
     setLoading(true);
     try {
-      // Ensure local DB is seeded if empty
+      console.log("Starting Syllabus Sync...");
+      
+      // Force re-seed if local database is empty
       const localCount = await db.subjects.count();
+      console.log("Local subjects count:", localCount);
+      
       if (localCount === 0) {
+        console.log("Local DB empty, seeding...");
         await seedDatabase();
       }
       
       const localSubs = await db.subjects.toArray();
-      const syncPromises = localSubs.map(s => 
-        setDoc(doc(fdb, 'userSubjects', `${user.uid}_${s.code}`), {
+      console.log(`Syncing ${localSubs.length} subjects to Firestore...`);
+      
+      const syncPromises = localSubs.map(async (s) => {
+        const docId = `${user.uid}_${s.code}`;
+        console.log(`Syncing doc: ${docId}`);
+        await setDoc(doc(fdb, 'userSubjects', docId), {
           ...s,
           id: undefined, 
           userId: user.uid,
           originalId: s.id
-        })
-      );
+        });
+      });
 
       await Promise.all(syncPromises);
-      console.log("Firestore Node: Syllabus Synchronized");
-    } catch (err) {
-      console.error("Syllabus sync failed", err);
+      console.log("Firestore Node: Syllabus Synchronized Successfully");
+    } catch (err: any) {
+      console.error("Syllabus sync failed:", err);
+      // If it's a permission error, it will show a more detailed log if we used handleFirestoreError
+      // But for now, let's just alert the "offline" state if relevant
+      if (err.message?.includes('offline')) {
+        alert("Connectivity Error: The app is currently in offline mode. Please check your internet connection.");
+      }
     } finally {
       setLoading(false);
     }
