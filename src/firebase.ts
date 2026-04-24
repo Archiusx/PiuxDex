@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -14,11 +14,10 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
 // In some environments, long polling works better than WebSockets
-// import { initializeFirestore } from 'firebase/firestore';
-// export const db = initializeFirestore(app, {
-//   experimentalForceLongPolling: true,
-// });
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
 
 export const auth = getAuth(app);
