@@ -109,11 +109,7 @@ export default function SyllabusTracker() {
       console.log("Firestore Node: Syllabus Synchronized Successfully");
     } catch (err: any) {
       console.error("Syllabus sync failed:", err);
-      // If it's a permission error, it will show a more detailed log if we used handleFirestoreError
-      // But for now, let's just alert the "offline" state if relevant
-      if (err.message?.includes('offline')) {
-        alert("Connectivity Error: The app is currently in offline mode. Please check your internet connection.");
-      }
+      // Remove alert because console.error is enough, and uncreated databases always trigger offline
     } finally {
       setLoading(false);
     }

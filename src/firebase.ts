@@ -16,8 +16,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // In some environments, long polling works better than WebSockets
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-});
+export const db = getFirestore(app);
 
 export const auth = getAuth(app);
